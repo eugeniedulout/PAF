@@ -53,6 +53,7 @@ filter.configure_pid = function(pid)
     pid.tx_name = 'vidTx' + pids.length; 
     pid.pck_tx = gl.createTexture(pid.tx_name);
     pid.pix_fmt = '';
+    pid.send_event(new FilterEvent(GF_FEVT_PLAY) );
   }
   //copy output props from first pid only
   if (pids.indexOf(pid) == 0) {

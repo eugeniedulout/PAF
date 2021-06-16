@@ -86,6 +86,14 @@ Vous pouvez maintenant commencer à réfléchir :
 - au type d'effets vidéo simples que vous comptez mettre en place (avec ce que vous avez compris de WebGL)
 - lister quelques effets vidéos plus complexes et vous poser la question de ce qu'il faudrait faire.
 
+_Note_
+Les entrées spécifiées ne sont pas obligatoirement des fichiers locaux, il peut s'agir aussi de flux réseaux ou de webcam. 
+
+Pour utiliser la webcam avec le premier exemple:
+
+gpac -i video:// paf_gpu_fx.js @ vout
+
+(le support webcam peut varier selon les plateformes).
 
 # But global du projet
 Il s'agira dans un premier temps de proposer différents effets vidéo simple et transition (mix video). Inspirez-vous de ce que vous pouvez trouver sur le web. Dans l'idéal vous pouvez ezzayer d'importer certains de ces effets directement dans votre code via les outils de chargement dynamique de code de JavaScript (modules et directive _import_ ).
