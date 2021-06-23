@@ -15,8 +15,8 @@ filter.set_cap({id: "CodecID", value: "raw", inout: true} );
 
 //set to true to draw on primary framebuffer, false to draw on texture
 let use_primary = true;
-let width=600;
-let height=400;
+let width=400;
+let height=600;
 let ipid=null;
 let opid=null;
 let nb_frames=0;
@@ -60,6 +60,7 @@ filter.configure_pid = function(pid)
     height = n_height;
     gl.resize(width, height);
   }
+
   if (pf != pix_fmt) {
     pix_fmt = pf;
     //reconfigure program if pixel format of texture changes
@@ -69,7 +70,6 @@ filter.configure_pid = function(pid)
   }
   print(`pid and WebGL configured: ${width}x${height} source format ${pf}`);
 }
-
 
 filter.process = function()
 {
@@ -104,27 +104,36 @@ filter.process = function()
   drawScene(gl, programInfo, buffers);
 
   //flush (execute all pending commands in openGL)
-  gl.flush();
+	gl.flush();
   //deactivate
-  gl.activate(false);
+	gl.activate(false);
 
-  //create packet from webgl framebuffer, using a callback function to notify us when we are done
-  let opck = opid.new_packet(gl, () => { filter.frame_pending=false; }, filter.depth );
+	//create packet from webgl framebuffer, using a callback function to notify us when we are done
+	let opck = opid.new_packet(gl, () => { filter.frame_pending=false; }, filter.depth );
   //remember we wait for the output frame to be consummed - set this before sending the frame for multithreaded cases 
-  this.frame_pending = true;
+	this.frame_pending = true;
   //optional, copy input packet properties to output packet
   opck.copy_props(ipck);
 
   //we no longer need input packet, drop it - once droped, we no longer can use pck_tx until we push a new packet to it 
   ipid.drop_packet();
   //send output
-  opck.send();
+	opck.send();
 
   //remember the number of frames sent - you will typically need that for animating your effects. 
   //For example to animate a value between 0 and 1 every 2 seconds (suppose 25 frames per second input)
-  //let value = (nb_frames % 50) / 50; 
   nb_frames++;
-  return GF_OK;
+
+  //uniforms
+  //let convolution = [1.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 4.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 1.0/16.0];
+  //let off = [vec2(-step_w, -step_h), vec2(0.0, -step_h), vec2(step_w, -step_h), vec2(-step_w, 0.0), vec2(0.0,0.0), ve2(step_w, 0.0), vec2(-step_w, step_h), vec2(0.0, step_h), vec2(step_w, step_h)];
+  gl.uniform1f(programInfo.uniformLocations.seuil,(nb_frames%50)/50);
+  gl.uniform1f(programInfo.uniformLocations.largeur, width);
+  gl.uniform1f(programInfo.uniformLocations.hauteur, height);
+  /*gl.uniform9fv(programInfo.uniformLocations.matriceConvolution, convolution);*/
+  /*gl.uniform9fv(programInfo.uniformLocations.offset, off);*/
+
+	return GF_OK;
 }
 
 //draw our scene
@@ -202,14 +211,43 @@ A first good exercice is to replace this 800 constant value by a uniform modifie
 const fsSource = `
 varying vec2 vTextureCoord;
 uniform sampler2D vidTx;
+uniform float useuil;
+uniform float uwidth;
+uniform float uheight;
+
 void main(void) {
   vec2 tx= vTextureCoord;
-  vec4 vid = texture2D(vidTx, tx);
-  if (gl_FragCoord.x < 800.0)
-    vid.rgb = vec3((vid.r+vid.g+vid.b)/3) ;
-  gl_FragColor = vid;
+  vec4 sum = vec4(0.0);
+  float step_w = 4.0/uwidth;
+  float step_h = 4.0/uheight;
+  if (gl_FragCoord.x < 325.0) {
+    vec4 tmp1 = texture2D(vidTx, tx + vec2(-step_w, -step_h));
+    sum += tmp1 * (-1.0)/9.0;
+  	vec4 tmp2 = texture2D(vidTx, tx + vec2(0.0, -step_h));
+    sum += tmp2 * (-1.0)/9.0;
+  	vec4 tmp3 = texture2D(vidTx, tx + vec2(step_w, -step_h));
+    sum += tmp3 * (-1.0)/9.0;
+  	vec4 tmp4 = texture2D(vidTx, tx + vec2(-step_w, 0.0));
+    sum += tmp4 * (-1.0)/9.0;
+  	vec4 tmp5 = texture2D(vidTx, tx);
+  	sum += tmp5 * 40.0/9.0;
+  	vec4 tmp6 = texture2D(vidTx, tx + vec2(step_w, 0.0));
+  	sum += tmp6 * (-1.0)/9.0;
+  	vec4 tmp7 = texture2D(vidTx, tx + vec2(-step_w, step_h));
+  	sum += tmp7 * (-1.0)/9.0;
+  	vec4 tmp8 = texture2D(vidTx, tx + vec2(0.0, step_h));
+  	sum += tmp8 * (-1.0)/9.0;
+  	vec4 tmp9 = texture2D(vidTx, tx + vec2(step_w, step_h));
+  	sum += tmp9 * (-1.0)/9.0;
+  }
+  else {
+	sum = texture2D(vidTx, tx);
+  }
+
+  gl_FragColor = sum;
 }
 `;
+
 
 
 
@@ -229,6 +267,11 @@ function setupProgram(gl, vsSource, fsSource)
       projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
       modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
       txVid: gl.getUniformLocation(shaderProgram, 'vidTx'),
+	  seuil: gl.getUniformLocation(shaderProgram, 'useuil'),
+	  largeur: gl.getUniformLocation(shaderProgram, 'uwidth'),
+	  hauteur: gl.getUniformLocation(shaderProgram, 'uheight'),
+	  /*matriceConvolution: gl.getUniformLocation(shaderProgram, 'uMatriceConvolution'),*/
+	 /* offset: gl.UniformLocation(shaderProgram,'uOffset'),*/
     },
   };
 }
