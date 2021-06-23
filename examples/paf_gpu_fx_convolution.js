@@ -30,7 +30,7 @@ let buffers = null;
 
 let in_error = false;
 
-let matriceConvolution = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+let matriceConvolution = [0.0, 1.0, 0.0, 1.0, -4.0, 1.0, 0.0, 1.0, 0.0];
 
 filter.initialize = function()
 {
@@ -165,8 +165,8 @@ function drawScene(gl, programInfo, buffers)
   gl.useProgram(programInfo.program);
 
   //set uniforms
-  let step_h = 1.0/height;
-  let step_w = 1.0/width;
+  let step_h = 4.0/height;
+  let step_w = 4.0/width;
   let off = [(-step_w, -step_h), (0.0, -step_h), (step_w, -step_h), (-step_w, 0.0), (0.0,0.0), (step_w, 0.0), (-step_w, step_h), (0.0, step_h), (step_w, step_h)];
   gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix.m);
   gl.uniformMatrix4fv( programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix.m);
@@ -213,22 +213,22 @@ varying vec2 vTextureCoord;
 uniform sampler2D vidTx;
 uniform float stepW;
 uniform float stepH;
-uniform float uMatConv[];
-uniform vec2 offset[];
+uniform float uMatConv[9];
+uniform vec2 offset[9];
 
 void main(void) {
   vec2 tx= vTextureCoord;
   vec4 vid = texture2D(vidTx, tx);
-  vec4 sum = vec4(0.0);
+  vec4 sum = vec4(0.0, 0.0, 0.0, 1.0);
   int i = 0;
   if (gl_FragCoord.x < 300.0) {
-    for (i=0; i<9; i++) {
-		vec4 tmp = texture2D(vidTx, tx + offset[i]);
-		sum += (tmp * uMatConv[i] + vec4(0.0,0.0,0.0,1.0));
-	}
-	sum /= 9.0;
-    gl_FragColor = sum;
-  }
+     for (i=0; i<9; i++) {
+        vec4 tmp = texture2D(vidTx, tx + offset[i]);
+        sum.rgb += tmp.rgb * vec3(uMatConv[i]);
+     }
+     sum.rgb /= 8.0;
+     gl_FragColor = sum;
+     }
   else {
 	gl_FragColor = vid;
   }
