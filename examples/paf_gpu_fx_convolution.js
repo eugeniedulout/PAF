@@ -30,6 +30,8 @@ let buffers = null;
 
 let in_error = false;
 
+let matriceConvolution = [1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0, 1.0];
+
 filter.initialize = function()
 {
   //initialize WebGL
@@ -124,15 +126,6 @@ filter.process = function()
   //For example to animate a value between 0 and 1 every 2 seconds (suppose 25 frames per second input)
   nb_frames++;
 
-  //uniforms
-  //let convolution = [1.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 4.0/16.0, 2.0/16.0, 1.0/16.0, 2.0/16.0, 1.0/16.0];
-  //let off = [vec2(-step_w, -step_h), vec2(0.0, -step_h), vec2(step_w, -step_h), vec2(-step_w, 0.0), vec2(0.0,0.0), ve2(step_w, 0.0), vec2(-step_w, step_h), vec2(0.0, step_h), vec2(step_w, step_h)];
-  gl.uniform1f(programInfo.uniformLocations.seuil,(nb_frames%50)/50);
-  gl.uniform1f(programInfo.uniformLocations.largeur, width);
-  gl.uniform1f(programInfo.uniformLocations.hauteur, height);
-  /*gl.uniform9fv(programInfo.uniformLocations.matriceConvolution, convolution);*/
-  /*gl.uniform9fv(programInfo.uniformLocations.offset, off);*/
-
 	return GF_OK;
 }
 
@@ -172,8 +165,15 @@ function drawScene(gl, programInfo, buffers)
   gl.useProgram(programInfo.program);
 
   //set uniforms
+  let step_h = 1.0/height;
+  let step_w = 1.0/width;
+  let off = [(-step_w, -step_h), (0.0, -step_h), (step_w, -step_h), (-step_w, 0.0), (0.0,0.0), (step_w, 0.0), (-step_w, step_h), (0.0, step_h), (step_w, step_h)];
   gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix.m);
   gl.uniformMatrix4fv( programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix.m);
+  gl.uniform1fv(programInfo.uniformLocations.matConv, matriceConvolution);
+  gl.uniform1f(programInfo.uniformLocations.largeur, step_w);
+  gl.uniform1f(programInfo.uniformLocations.hauteur, step_h);
+  gl.uniform2fv(programInfo.uniformLocations.offs, off);
   //uniforms don't have to be set at each frame, they can be pushed only when modified
   //your program will likely declare many more uniforms to control the effect
 
@@ -211,41 +211,29 @@ A first good exercice is to replace this 800 constant value by a uniform modifie
 const fsSource = `
 varying vec2 vTextureCoord;
 uniform sampler2D vidTx;
-uniform float useuil;
-uniform float uwidth;
-uniform float uheight;
+uniform float stepW;
+uniform float stepH;
+uniform float uMatConv[];
+uniform vec2 offset[];
 
 void main(void) {
   vec2 tx= vTextureCoord;
+  vec4 vid = texture2D(vidTx, tx);
   vec4 sum = vec4(0.0);
-  float step_w = 4.0/uwidth;
-  float step_h = 4.0/uheight;
+  int i = 0;
   if (gl_FragCoord.x < 300.0) {
-	vec4 tmp1 = texture2D(vidTx, tx + vec2(-step_w, -step_h));
- 	sum += tmp1 * 1.0/9.0;
-  	vec4 tmp2 = texture2D(vidTx, tx + vec2(0.0, -step_h));
- 	sum += tmp2 * 1.0/9.0;
-  	vec4 tmp3 = texture2D(vidTx, tx + vec2(step_w, -step_h));
- 	sum += tmp3 * 1.0/9.0;
-  	vec4 tmp4 = texture2D(vidTx, tx + vec2(-step_w, 0.0));
-	sum += tmp4 * 1.0/9.0;
-  	vec4 tmp5 = texture2D(vidTx, tx);
-  	sum += tmp5 * 1.0/9.0;
-  	vec4 tmp6 = texture2D(vidTx, tx + vec2(step_w, 0.0));
-  	sum += tmp6 * 1.0/9.0;
-  	vec4 tmp7 = texture2D(vidTx, tx + vec2(-step_w, step_h));
-  	sum += tmp7 * 1.0/9.0;
-  	vec4 tmp8 = texture2D(vidTx, tx + vec2(0.0, step_h));
-  	sum += tmp8 * 1.0/9.0;
-  	vec4 tmp9 = texture2D(vidTx, tx + vec2(step_w, step_h));
-  	sum += tmp9 * 1.0/9.0;
+    for (i=0; i<9; i++) {
+		vec4 tmp = texture2D(vidTx, tx + offset[i]);
+		sum += (tmp * uMatConv[i] + vec4(0.0,0.0,0.0,1.0));
+	}
+	sum /= 9.0;
+    gl_FragColor = sum;
   }
   else {
-	sum = texture2D(vidTx, tx);
+	gl_FragColor = vid;
   }
-
-  gl_FragColor = sum;
 }
+
 `;
 
 
@@ -267,11 +255,10 @@ function setupProgram(gl, vsSource, fsSource)
       projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
       modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
       txVid: gl.getUniformLocation(shaderProgram, 'vidTx'),
-	  seuil: gl.getUniformLocation(shaderProgram, 'useuil'),
-	  largeur: gl.getUniformLocation(shaderProgram, 'uwidth'),
-	  hauteur: gl.getUniformLocation(shaderProgram, 'uheight'),
-	  /*matriceConvolution: gl.getUniformLocation(shaderProgram, 'uMatriceConvolution'),*/
-	 /* offset: gl.UniformLocation(shaderProgram,'uOffset'),*/
+	  largeur: gl.getUniformLocation(shaderProgram, 'stepW'),
+	  hauteur: gl.getUniformLocation(shaderProgram, 'stepH'),
+	  matConv: gl.getUniformLocation(shaderProgram, 'uMatConv'),
+	  offs: gl.getUniformLocation(shaderProgram, 'offset'),
     },
   };
 }
