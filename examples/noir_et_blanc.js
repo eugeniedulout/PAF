@@ -206,7 +206,7 @@ void main(void) {
   vec2 tx= vTextureCoord;
   vec4 vid = texture2D(vidTx, tx);
   if (gl_FragCoord.x < 800.0)
-    vid.rgb = vec3(vid.rgb[0]+vid.rgb[1]+vid.rgb[2])/3) ;
+    vid.rgb = vec3((vid.r+vid.g+vid.b)/3) ;
   gl_FragColor = vid;
 }
 `;
