@@ -183,13 +183,14 @@ function drawScene(gl, programInfo, buffers)
   gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix.m);
   gl.uniformMatrix4fv( programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix.m);
   let s = 0;
-  if (nb_frames > 10 && nb_frames < 90) {
-	s = (nb_frames-10)/80;
+  if (nb_frames < 100) {
+	s = (nb_frames/100);
   }
-  else if (nb_frames >= 90) {
+  else {
 	s = 1;
   }
   gl.uniform1f(programInfo.uniformLocations.seuil, s);
+
   //uniforms don't have to be set at each frame, they can be pushed only when modified
   //your program will likely declare many more uniforms to control the effect
 
@@ -232,11 +233,54 @@ varying vec2 vTextureCoord;
 uniform sampler2D vidTx1;
 uniform sampler2D vidTx2;
 uniform float seuil;
+
+float check(vec2 p1, vec2 p2, vec2 p3)
+{
+  return (p1.x - p3.x) * (p2.y - p3.y) - (p2.x - p3.x) * (p1.y - p3.y);
+}
+
+bool PointInTriangle (vec2 pt, vec2 p1, vec2 p2, vec2 p3)
+{
+    bool b1, b2, b3;
+    b1 = check(pt, p1, p2) < 0.0;
+    b2 = check(pt, p2, p3) < 0.0;
+    b3 = check(pt, p3, p1) < 0.0;
+    return ((b1 == b2) && (b2 == b3));
+}
+
+bool in_top_triangle(vec2 p){
+  vec2 vertex1, vertex2, vertex3;
+  vertex1 = vec2(0.5, seuil);
+  vertex2 = vec2(0.5-seuil, 0.0);
+  vertex3 = vec2(0.5+seuil, 0.0);
+  if (PointInTriangle(p, vertex1, vertex2, vertex3))
+  {
+    return true;
+  }
+  return false;
+}
+
+bool in_bottom_triangle(vec2 p){
+  vec2 vertex1, vertex2, vertex3;
+  vertex1 = vec2(0.5, 1.0 - seuil);
+  vertex2 = vec2(0.5-seuil, 1.0);
+  vertex3 = vec2(0.5+seuil, 1.0);
+  if (PointInTriangle(p, vertex1, vertex2, vertex3))
+  {
+    return true;
+  }
+  return false;
+}
+
 void main(void) {
+	
   vec2 tx= vTextureCoord;
   vec4 vid1 = texture2D(vidTx1, tx);
   vec4 vid2 = texture2D(vidTx2, tx);
-  vid1 = mix(vid1, vid2, seuil);
+  if(in_top_triangle(tx) || in_bottom_triangle(tx)) {
+	vid1.rgb = vid2.rgb;
+  }
+
   gl_FragColor = vid1;
 }
 `;

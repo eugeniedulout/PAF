@@ -184,7 +184,7 @@ function drawScene(gl, programInfo, buffers)
   gl.uniformMatrix4fv( programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix.m);
   let s = 0;
   if (nb_frames > 10 && nb_frames < 110) {
-	s = ((nb_frames-10)%100)/100;
+	s = (nb_frames-10)/100;
   }
   else if (nb_frames >= 110) {
 	s = 1;
