@@ -183,15 +183,13 @@ function drawScene(gl, programInfo, buffers)
   gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix.m);
   gl.uniformMatrix4fv( programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix.m);
   let s = 0;
-  if (nb_frames > 10 && nb_frames < 110) {
-	s = ((nb_frames-10)%100)/100;
+  if (nb_frames > 10 && nb_frames < 90) {
+	s = ((nb_frames-10)%80)/80;
   }
-  else if (nb_frames >= 110) {
+  else if (nb_frames >= 90) {
 	s = 1;
   }
-  gl.uniform1f(programInfo.uniformLocations.seuil, width*s);
-  gl.uniform1f(programInfo.uniformLocations.largeur, width);
-  gl.uniform1f(programInfo.uniformLocations.seuil2, s);
+  gl.uniform1f(programInfo.uniformLocations.seuil, s);
   //uniforms don't have to be set at each frame, they can be pushed only when modified
   //your program will likely declare many more uniforms to control the effect
 
@@ -234,18 +232,12 @@ varying vec2 vTextureCoord;
 uniform sampler2D vidTx1;
 uniform sampler2D vidTx2;
 uniform float seuil;
-uniform float width;
-uniform float seuil2;
 void main(void) {
   vec2 tx= vTextureCoord;
-  vec4 vid = texture2D(vidTx1, tx);
-  if (gl_FragCoord.x < seuil) {
-	vid = texture2D(vidTx1, tx + vec2(1.0-seuil2, 0.0));
-  }
-  else {
-	vid = texture2D(vidTx2, tx + vec2(-seuil2, 0.0));
-  }
-  gl_FragColor = vid;
+  vec4 vid1 = texture2D(vidTx1, tx);
+  vec4 vid2 = texture2D(vidTx2, tx);
+  vid1 = mix(vid1, vid2, seuil);
+  gl_FragColor = vid1;
 }
 `;
 
@@ -267,8 +259,6 @@ function setupProgram(gl, vsSource, fsSource)
       projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
       modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
 	  seuil: gl.getUniformLocation(shaderProgram, 'seuil'),
-	  largeur: gl.getUniformLocation(shaderProgram, 'width'),
-	  seuil2: gl.getUniformLocation(shaderProgram, 'seuil2'),
     },
   };
 }
