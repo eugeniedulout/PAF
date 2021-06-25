@@ -207,19 +207,19 @@ void main(void) {
   vec4 vid = texture2D(vidTx, tx);
   if (gl_FragCoord.x < 800.0)
     if (vid.r>0.5)
-      vid.r=vid.r+(1-vid.r)/3;
+      vid.r=vid.r+(1-vid.r)/1000;
     else
-      vid.r=vid.r*(2/3);
+      vid.r=vid.r*(999/1000);
 
     if (vid.g>0.5)
-      vid.g=vid.g+(1-vid.r)/3;
+      vid.g=vid.g+(1-vid.g)/1000;
     else
-      vid.g=vid.g*(2/3);
+      vid.g=vid.g*(999/1000);
 
     if (vid.b>0.5)
-      vid.b=vid.b+(1-vid.b)/3;
+      vid.b=vid.b+(1-vid.b)/1000;
     else
-      vid.b=vid.b*(2/3);
+      vid.b=vid.b*(999/1000);
   gl_FragColor = vid;
 }
 `;
