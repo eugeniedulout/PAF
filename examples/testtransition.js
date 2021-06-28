@@ -3,42 +3,42 @@ import {Texture, Matrix} from 'evg'
 
 
 //metadata
-filter.set_name("PAF GPU Effects");
-filter.set_desc("WebGL video graphics generator");
+filter.set_name("PAF VideoMix Effects");
+filter.set_desc("WebGL video mixer generator");
 filter.set_version("0.1beta");
 filter.set_author("PAF2021 team");
-filter.set_help("This filter provides some basic structure for GPU visual effects");
+filter.set_help("This filter provides some basic structure for GPU video mixing");
 
-//raw video in and out
+//filter capapbilities: we accept raw video in and produce raw video out
 filter.set_cap({id: "StreamType", value: "Video", inout: true} );
 filter.set_cap({id: "CodecID", value: "raw", inout: true} );
+
+//we accept one additionnal stream
+filter.max_pids=1;
 
 //set to true to draw on primary framebuffer, false to draw on texture
 let use_primary = true;
 let width=600;
 let height=400;
-let ipid=null;
 let opid=null;
 let nb_frames=0;
-let pix_fmt = '';
 let programInfo = null;
 
 let gl = null;
-let pck_tx = null;
-let img_tx = null;
 let buffers = null;
 
 let in_error = false;
+
+let pids = [];
+
 
 filter.initialize = function()
 {
   //initialize WebGL
   gl = new WebGLContext(width, height, {depth: true, primary: use_primary});
-  //initialize texture for video
-  pck_tx = gl.createTexture('vidTx');
   //initialize vertices buffers
   buffers = initBuffers(gl);
-  if (!gl || !pck_tx || !buffers) return GF_IO_ERR;
+  if (!gl  || !buffers) return GF_IO_ERR;
 }
 
 //new input video or change of input video format 
@@ -47,27 +47,38 @@ filter.configure_pid = function(pid)
   if (!opid) {
     opid = this.new_pid();
   }
-  ipid = pid;
-  opid.copy_props(pid);
-  opid.set_prop('PixelFormat', 'rgba');
-  opid.set_prop('Stride', null);
-  opid.set_prop('StrideUV', null);
-  let n_width = pid.get_prop('Width');
-  let n_height = pid.get_prop('Height');
-  let pf = pid.get_prop('PixelFormat');
-  if ((n_width != width) || (n_height != height)) {
-    width = n_width;
-    height = n_height;
-    gl.resize(width, height);
+  //new input pid
+  if (pids.indexOf(pid)<0) {
+    pids.push(pid);
+    pid.tx_name = 'vidTx' + pids.length; 
+    pid.pck_tx = gl.createTexture(pid.tx_name);
+    pid.pix_fmt = '';
+    pid.send_event(new FilterEvent(GF_FEVT_PLAY) );
   }
-  if (pf != pix_fmt) {
-    pix_fmt = pf;
+  //copy output props from first pid only
+  if (pids.indexOf(pid) == 0) {
+    opid.copy_props(pid);
+    opid.set_prop('PixelFormat', 'rgba');
+    opid.set_prop('Stride', null);
+    opid.set_prop('StrideUV', null);
+    let n_width = pid.get_prop('Width');
+    let n_height = pid.get_prop('Height');
+    if ((n_width != width) || (n_height != height)) {
+      width = n_width;
+      height = n_height;
+      gl.resize(width, height);
+    }
+    print(`pid and WebGL configured: ${width}x${height}`);
+  }
+  //check pid pixel format
+  let pf = pid.get_prop('PixelFormat');
+  if (pf != pid.pix_fmt) {
+    pid.pix_fmt = pf;
     //reconfigure program if pixel format of texture changes
     programInfo = null;
     //invalidate the video texture
-    pck_tx.reconfigure();
+    pid.pck_tx.reconfigure();
   }
-  print(`pid and WebGL configured: ${width}x${height} source format ${pf}`);
 }
 
 
@@ -78,18 +89,21 @@ filter.process = function()
   if (filter.frame_pending) {
     return GF_OK;
   }
-  //fetch packet on input video   
-  let ipck = ipid.get_packet();
-  if (!ipck) return GF_OK;
 
   //activate webgl   
   gl.activate(true);
 
-  //push packet to texture data, this will update the internal format of the texture to the video stream format
-  pck_tx.upload(ipck);
-  //these 2 lines are the true OpenGL way of doing the above line
-//  gl.bindTexture(gl.TEXTURE_2D, pck_tx);
-//  gl.texImage2D(gl.TEXTURE_2D, 0, 0, 0, 0, ipck);
+  //fetch packets on each inputs (2 in our case)   
+  for (let i=0; i<pids.length; i++) {
+    pids[i].pck = pids[i].get_packet();
+    if (!pids[i].pck) {
+      //we need a packet from each source before setting up 
+      if (!programInfo) return GF_OK;
+      continue;
+    }
+    //push packet to texture data, this will update the internal format of the texture to the video stream format
+    pids[i].pck_tx.upload(pids[i].pck);
+  }
 
   //the texture format is now known, create the GLSL shaders and program
   if (!programInfo) {
@@ -104,27 +118,30 @@ filter.process = function()
   drawScene(gl, programInfo, buffers);
 
   //flush (execute all pending commands in openGL)
-  gl.flush();
+	gl.flush();
   //deactivate
-  gl.activate(false);
+	gl.activate(false);
 
-  //create packet from webgl framebuffer, using a callback function to notify us when we are done
-  let opck = opid.new_packet(gl, () => { filter.frame_pending=false; }, filter.depth );
+	//create packet from webgl framebuffer, using a callback function to notify us when we are done
+	let opck = opid.new_packet(gl, () => { filter.frame_pending=false; }, filter.depth );
   //remember we wait for the output frame to be consummed - set this before sending the frame for multithreaded cases 
-  this.frame_pending = true;
-  //optional, copy input packet properties to output packet
-  opck.copy_props(ipck);
+	this.frame_pending = true;
 
-  //we no longer need input packet, drop it - once droped, we no longer can use pck_tx until we push a new packet to it 
-  ipid.drop_packet();
+  //we no longer need input packets, drop them (we assume same fps) - once droped, we no longer can use pck_tx until we push a new packet to it 
+  for (let i=0; i<pids.length; i++) {
+    if (!i && pids[i].pck) opck.copy_props(pids[i].pck);
+    pids[i].drop_packet();
+    pids[i].pck = null;
+  }
+
   //send output
-  opck.send();
+	opck.send();
 
   //remember the number of frames sent - you will typically need that for animating your effects. 
   //For example to animate a value between 0 and 1 every 2 seconds (suppose 25 frames per second input)
   //let value = (nb_frames % 50) / 50; 
   nb_frames++;
-  return GF_OK;
+	return GF_OK;
 }
 
 //draw our scene
@@ -165,14 +182,26 @@ function drawScene(gl, programInfo, buffers)
   //set uniforms
   gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix.m);
   gl.uniformMatrix4fv( programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix.m);
+  let s = 0;
+  if (nb_frames < 100) {
+	s = (nb_frames/100);
+  }
+  else {
+	s = 1;
+  }
+  gl.uniform1f(programInfo.uniformLocations.seuil, s*width);
+
   //uniforms don't have to be set at each frame, they can be pushed only when modified
   //your program will likely declare many more uniforms to control the effect
 
-  //activate video texture
-  gl.activeTexture(gl.TEXTURE0);
-  gl.bindTexture(gl.TEXTURE_2D, pck_tx);
-  //this one is ignored for gpac named textures, just kept to make sure we don't break usual webGL programming 
-  gl.uniform1i(programInfo.uniformLocations.txVid, 0);
+  //activate video textures - first texture unit is 0
+  let first_tx = gl.TEXTURE0;
+  pids.forEach( pid => {
+    gl.activeTexture(first_tx);
+    gl.bindTexture(gl.TEXTURE_2D, pid.pck_tx);
+    //update texture unit by number of textures used by the texture for this pid
+    first_tx += pid.pck_tx.nb_textures;
+  });
 
 
   //bind indices and draw
@@ -196,31 +225,32 @@ void main() {
 
 
 /* Fragment shader GLSL code - this is the code you will have to play with
-the example below shows how to perform reverse video effect if horizontal pixel to draw is less than 800.
-A first good exercice is to replace this 800 constant value by a uniform modified at each frame whose value depend on the number of frames drawn
+the example below shows how to mix two videos at 50% when the first video is close to white (RGB= {1, 1, 1}), or keep the first video otherwise
+A first good exercice is to replace the constants used (0.9 and 0.5) by uniforms modified at each frame whose values depend on the number of frames drawn 
 */
 const fsSource = `
 varying vec2 vTextureCoord;
-uniform sampler2D vidTx;
+uniform sampler2D vidTx1;
+uniform sampler2D vidTx2;
+uniform float seuil;
+
+
+// Author: gre
+// License: MIT
+
+
+
+
 void main(void) {
+	
   vec2 tx= vTextureCoord;
-  vec4 vid = texture2D(vidTx, tx);
-  if (gl_FragCoord.x < 800.0)
-    if (vid.r>0.5)
-      vid.r=vid.r+(1-vid.r)/1000;
-    else
-      vid.r=vid.r*(999/1000);
+  vec4 vid1 = texture2D(vidTx1, tx);
+  vec4 vid2 = texture2D(vidTx2, tx);
+  if(gl_FragCoord.x< seuil) {
+	vid1.rgb = vid2.rgb;
+  }
 
-    if (vid.g>0.5)
-      vid.g=vid.g+(1-vid.g)/1000;
-    else
-      vid.g=vid.g*(999/1000);
-
-    if (vid.b>0.5)
-      vid.b=vid.b+(1-vid.b)/1000;
-    else
-      vid.b=vid.b*(999/1000);
-  gl_FragColor = vid;
+  gl_FragColor = vid1;
 }
 `;
 
@@ -241,7 +271,7 @@ function setupProgram(gl, vsSource, fsSource)
     uniformLocations: {
       projectionMatrix: gl.getUniformLocation(shaderProgram, 'uProjectionMatrix'),
       modelViewMatrix: gl.getUniformLocation(shaderProgram, 'uModelViewMatrix'),
-      txVid: gl.getUniformLocation(shaderProgram, 'vidTx'),
+	  seuil: gl.getUniformLocation(shaderProgram, 'seuil'),
     },
   };
 }
