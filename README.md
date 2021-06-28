@@ -148,9 +148,6 @@ Else
 		{
 			 A1ij= programe( programe(A,shedderi) ,shedderj)
 		}
-	
-
-// Il reste la transition à effectuer dans le cas ou elle n’a pas été faite:
 
 		transition( A0ij, A1i’j’)
 	}
