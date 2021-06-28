@@ -101,6 +101,65 @@ Il s'agira dans un premier temps de proposer différents effets vidéo simple et
 Dans un second temps, vous allez vite vous appercevoir qu'un fois vos premiers effets en place (par ex fxA, fxB et mixA), combiner ces effets dans un unique shaders nécessite une ré-écriture complète d'un nouveau shader. Il s'agira alors de proposer une façon intelligent de faire ce travail afin de pouvoir rapidement spécifier mixA( fxA(video1), fxB(video2) ).
 
 
+**Évolution de l'architecture:**
+
+_Norme de numérotation:_
+On utilisera les indices ‘bL’ sur chaque texture (ou texture après effet grâce aux shedders) où:
+b: vaut 0 ou 1 (dans le cas ou l’on utilise qu’une seule transition), et indique l’entrée a partir de laquelle l’image arrive.
+L est une liste d’entier qui indique les numéros des filtres et effets qui ont étés appliqués à la texture de départ:
+
+Ensuite il faut légèrement modifier l’implémentation des shedders comparé à ce que l’on a fait jusqu’à présent. En effet, puisque qu’on doit réutiliser la sortie de la fonction par la suite (dans le cas de 2 effets à la suite par exemple) il est nécéssaire de faire un ‘return’ d’un vecteur à 4 dimension (car RGBA) dans une image intermédiaire (qui sera donc l’entrée du prochain shedder)
+
+Par exemple, soit A une texture.
+A114 est la nouvelle texture construite à partir de A et qui a été placée sur l’entrée 1 et à quoi on a fait subir les effets 1 et 4.
+
+
+
+_Nous pouvons maintenant implémenter un pseudo code:_
+
+
+// A et B sont les 2 textures d’entrée
+
+If ( !shedderi.useNeighbors && !shedderi’.useNeighbors)
+	{
+		transition( programe( programe(A,shedderi) ,shedderj) , programe( programe(A,shedderi’),shedderj’)
+	}
+Else
+	{
+		// Pour l’entrée 0
+		If (!shedderi.useNeighbors)
+		{
+			A0i = programe(A,shedderi)
+			A0ij= programe(A0i,shedderj)
+		}
+		Else
+		{
+			 A0ij= programe( programe(A,shedderi) ,shedderj)
+		}
+
+
+		// Pour l’entrée 1
+		If (!shedderi’.useNeighbors)
+		{
+			A1i’ = programe(A,shedderi’)
+			A1ij’= programe(A1i,shedderj’)
+		}
+		Else
+		{
+			 A1ij= programe( programe(A,shedderi) ,shedderj)
+		}
+	
+
+// Il reste la transition à effectuer dans le cas ou elle n’a pas été faite:
+
+		transition( A0ij, A1i’j’)
+	}
+
+
+
+
+
+
 
 
 
