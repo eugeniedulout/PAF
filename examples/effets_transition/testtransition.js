@@ -235,9 +235,13 @@ uniform sampler2D vidTx2;
 uniform float seuil;
 
 
-// Author: gre
-// License: MIT
+vec3 effet1(vec3 rgb) {
+  return vec3((rgb.x+rgb.y+rgb.z)/3);
+}
 
+vec3 effet2(vec3 rgb) {
+  return (vec3(1.0) - rgb);
+}
 
 
 
@@ -246,8 +250,9 @@ void main(void) {
   vec2 tx= vTextureCoord;
   vec4 vid1 = texture2D(vidTx1, tx);
   vec4 vid2 = texture2D(vidTx2, tx);
+  vid1.rgb = effet2(vid1.rgb);
   if(gl_FragCoord.x< seuil) {
-	vid1.rgb = vid2.rgb;
+	vid1.rgb = effet1(vid2.rgb);
   }
 
   gl_FragColor = vid1;
