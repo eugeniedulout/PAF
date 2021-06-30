@@ -134,7 +134,7 @@ filter.process = function()
 
   //GLSL program not setup, do it now 
   if (!program_pass1) {
-      program_pass1 = setupProgram(gl, vsSource, obj1.code +"\n"+ obj2.code);
+      program_pass1 = setupProgram(gl, vsSource, obj1.code +"\n"+obj2.code);
       program_pass1.uniformLocations.texture = gl.getUniformLocation(program_pass1.program, 'vidTx');
 
       program_pass2 = setupProgram(gl, vsSource, fsSource2);
