@@ -52,14 +52,6 @@ let nb_frames=0;
 
 let scaler = 10;
 
-import('../../../Codes_separes/CodeFlou.js')
-      .then(obj1 => { counter--; print('Module loaded: ' + obj.code + ' nb uniforms ' + obj.uniforms.length)}) 
-      .catch(err => { counter--; print('Failed to load object: ' + err)}); 
-
-import('../../../Codes_separes/Negatif.js')
-      .then(  obj2 => { counter--; print('Module loaded: ' + obj.code + ' nb uniforms ' + obj.uniforms.length)})
-      .catch(  err => { counter--; print('Failed to load object: ' + err)}); 
-
 filter.initialize = function()
 {
   //create webgl context upon startup
@@ -134,7 +126,7 @@ filter.process = function()
 
   //GLSL program not setup, do it now 
   if (!program_pass1) {
-      program_pass1 = setupProgram(gl, vsSource, obj1.code +"\n"+ obj2.code);
+      program_pass1 = setupProgram(gl, vsSource, fsSource);
       program_pass1.uniformLocations.texture = gl.getUniformLocation(program_pass1.program, 'vidTx');
 
       program_pass2 = setupProgram(gl, vsSource, fsSource2);
@@ -152,12 +144,12 @@ filter.process = function()
 
 
   //flush all GPU commands before releasing
-	gl.flush();
-	gl.activate(false);
+  gl.flush();
+  gl.activate(false);
 
-	//create packet from webgl framebuffer, using a callback function to notfify when the output packet is consummed
-	let opck = opid.new_packet(gl, () => { filter.frame_pending=false; }, filter.depth );
-	this.frame_pending = true;
+  //create packet from webgl framebuffer, using a callback function to notfify when the output packet is consummed
+  let opck = opid.new_packet(gl, () => { filter.frame_pending=false; }, filter.depth );
+  this.frame_pending = true;
   //copy property of input packet to output (timing, atc ...)
   opck.copy_props(ipck);
 
@@ -166,9 +158,9 @@ filter.process = function()
   ipid.drop_packet();
 
   //and send
-	opck.send();
+  opck.send();
   nb_frames++;
-	return GF_OK;
+  return GF_OK;
 }
 
 function reconfig_fbo()
@@ -305,7 +297,6 @@ void main(void) {
 const fsSource2 = `
 varying vec2 vTextureCoord;
 uniform sampler2D imgTx;
-uniform float seuil;
 float scale = 10.0;
 void main(void) {
   vec2 tx = vTextureCoord;
