@@ -1,5 +1,3 @@
-//debut fichier "fx1.js"
-
 const name = 'BAndW';
 
 const uniforms = [];

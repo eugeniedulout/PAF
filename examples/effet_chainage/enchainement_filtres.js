@@ -31,11 +31,14 @@ let buffers = null;
 let in_error = false;
 
 let counter = 0;
-//let fx_mod1 = null;
 
-let fx_mod1 = import('./BAndWhite.js')
-       .then( obj => { print('Module loaded: ' + obj.code + ' nb uniforms ' + obj.uniforms.length); counter--;})
-       .catch( err => { counter--; print('Failed to load object: ' + err); });
+let fx_mod1 = null;
+
+//import fx1
+counter++;
+import('./BAndWhite.js')
+       .then( obj => { print('Module loaded: BAndWhite' + obj.code + ' nb uniforms ' + obj.uniforms.length); fx_mod1 = obj; counter--;})
+       .catch( err => { counter--; print('Failed to load object ./BAndWhite.js: ' + err); });
 
 
 filter.initialize = function()
@@ -79,11 +82,36 @@ filter.configure_pid = function(pid)
 }
 
 
+
+/* Fragment shader GLSL code - this is the code you will have to play with
+the example below shows how to perform reverse video effect if horizontal pixel to draw is less than 800.
+A first good exercice is to replace this 800 constant value by a uniform modified at each frame whose value depend on the number of frames drawn
+*/
+
+function make_fs_source()
+{
+  let fsSource = `
+varying vec2 vTextureCoord;
+uniform sampler2D vidTx;
+
+void main(void) {
+  vec2 tx= vTextureCoord;
+  vec4 vid = texture2D(vidTx, tx);
+` + fx_mod1.code + `
+  gl_FragColor = vid;
+}
+`;
+  
+  print('new shader is ' + fsSource);
+ return fsSource;
+}
+
+
 filter.process = function()
 {
   if (in_error) return GF_BAD_PARAM;
   //waiting for the last emited frame to be consummed
-  if (filter.frame_pending) {
+  if (filter.frame_pending || counter) {
     return GF_OK;
   }
   //fetch packet on input video   
@@ -101,7 +129,7 @@ filter.process = function()
 
   //the texture format is now known, create the GLSL shaders and program
   if (!programInfo) {
-    programInfo = setupProgram(gl, vsSource, fsSource);
+    programInfo = setupProgram(gl, vsSource, make_fs_source() );
     if (!programInfo) {
       in_error = true;
       return GF_BAD_PARAM;
@@ -201,29 +229,6 @@ void main() {
   vTextureCoord = aTextureCoord;
 }
 `;
-
-
-/* Fragment shader GLSL code - this is the code you will have to play with
-the example below shows how to perform reverse video effect if horizontal pixel to draw is less than 800.
-A first good exercice is to replace this 800 constant value by a uniform modified at each frame whose value depend on the number of frames drawn
-*/
-import('BAndWhite.js')
-      .then( obj => { counter--; print('Module loaded: ' + obj.code + ' nb uniforms ' + obj.uniforms.length); fx1 = obj;})
-      .catch( err => { counter--; print('Failed to load object: ' + err)});
-
-const fsSource = `
-varying vec2 vTextureCoord;
-uniform sampler2D vidTx;
-
-void main(void) {
-  vec2 tx= vTextureCoord;
-  vec4 vid = texture2D(vidTx, tx);
-`+ fx_mod1.code + `
-  gl_FragColor = vid;
-}
-`;
-
-
 
 //create the shader program and get the uniform location for later calls to setUniform
 function setupProgram(gl, vsSource, fsSource)
