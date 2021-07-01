@@ -39,18 +39,12 @@ let off_tx = null;
 let fbo_width;
 let fbo_height;
 
-let pck_tx = null;
-
-
 let scaler = 1;
 
 filter.initialize = function()
 {
   //initialize WebGL
   gl = new WebGLContext(width, height, {depth: filter.depth ? "texture" : true, primary: use_primary});
-  //create texture for input packets, with no associated data yet
-  pck_tx = gl.createTexture('vidTx1');
-  pck_tx.pbo = false;
   //initialize vertices buffers
   buffers = initBuffers(gl);
   if (!gl  || !buffers) return GF_IO_ERR;
@@ -69,6 +63,7 @@ filter.configure_pid = function(pid)
   //new input pid
   if (pids.indexOf(pid)<0) {
     pids.push(pid);
+    //create texture for input packets, with no associated data yet
     pid.tx_name = 'vidTx' + pids.length; 
     pid.pck_tx = gl.createTexture(pid.tx_name);
     pid.pix_fmt = '';
@@ -123,28 +118,31 @@ filter.process = function()
     pids[i].pck = pids[i].get_packet();
     if (!pids[i].pck) {
       //we need a packet from each source before setting up 
-      //GLSL program not setup, do it now 
-    if (!program_pass1) {
-      program_pass1 = setupProgram(gl, vsSource, fsSource);
-      program_pass1.uniformLocations.texture = gl.getUniformLocation(program_pass1.program, 'vidTx');
-
-      program_pass2 = setupProgram(gl, vsSource, fsSource2);
-      program_pass2.uniformLocations.texture = gl.getUniformLocation(program_pass2.program, 'imgTx');
-    continue;
+      if (!program_pass1) return GF_OK;
+      continue;
     }
     //push packet to texture data, this will update the internal format of the texture to the video stream format
     pids[i].pck_tx.upload(pids[i].pck);
+  }
+
+    //GLSL program not setup, do it now 
+    if (!program_pass1) {
+      program_pass1 = setupProgram(gl, vsSource, fsSourceMIX);
+      program_pass1.uniformLocations.texture1 = gl.getUniformLocation(program_pass1.program, 'vidTx1');
+      program_pass1.uniformLocations.texture2 = gl.getUniformLocation(program_pass1.program, 'vidTx2');
+
+      program_pass2 = setupProgram(gl, vsSource, fsSourceFX);
+      program_pass2.uniformLocations.texture1 = gl.getUniformLocation(program_pass2.program, 'imgTx');
     }
 
-  }
 
   // Draw the scene
   //first pass using our source but on our intermediate fbo
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);  
-  drawScene(gl, program_pass1, pck_tx);
+  drawScene(gl, program_pass1, pids[0].pck_tx, pids[1].pck_tx);
   //second pass using our intermediate texture on main fbo
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);  
-  drawScene(gl, program_pass2, off_tx);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null); 
+  drawScene(gl, program_pass2, off_tx, null);
 
   //flush (execute all pending commands in openGL)
 	gl.flush();
@@ -193,7 +191,7 @@ function reconfig_fbo()
 }
 
 //draw our scene
-function drawScene(gl, programInfo, buffers)
+function drawScene(gl, prog_info, tx1, tx2)
 {
   //we fill the whole screen
   gl.viewport(0, 0, width, height);
@@ -209,46 +207,48 @@ function drawScene(gl, programInfo, buffers)
   const projectionMatrix = new Matrix().ortho(-1, 1, 1, -1, 1, -1);
   //identity matrix for this example
   const modelViewMatrix = new Matrix();
-
   //bind vertex position
   {
     gl.bindBuffer(gl.ARRAY_BUFFER, buffers.position);
-    gl.vertexAttribPointer(programInfo.attribLocations.vertexPosition, 3 /*numComponents per vertex*/, gl.FLOAT /*component type*/, false /*normalize*/, 0 /*stride*/, 0 /*offset*/);
-    gl.enableVertexAttribArray(programInfo.attribLocations.vertexPosition);
+    gl.vertexAttribPointer(prog_info.attribLocations.vertexPosition, 3 /*numComponents per vertex*/, gl.FLOAT /*component type*/, false /*normalize*/, 0 /*stride*/, 0 /*offset*/);
+    gl.enableVertexAttribArray(prog_info.attribLocations.vertexPosition);
   }
 
   //bind texture coordinates
   {
     gl.bindBuffer(gl.ARRAY_BUFFER, buffers.textureCoord);
-    gl.vertexAttribPointer(programInfo.attribLocations.textureCoord, 2  /*numComponents per texture coord*/, gl.FLOAT /*component type*/, false /*normalize*/, 0 /*stride*/, 0 /*offset*/);
-    gl.enableVertexAttribArray(programInfo.attribLocations.textureCoord);
+    gl.vertexAttribPointer(prog_info.attribLocations.textureCoord, 2  /*numComponents per texture coord*/, gl.FLOAT /*component type*/, false /*normalize*/, 0 /*stride*/, 0 /*offset*/);
+    gl.enableVertexAttribArray(prog_info.attribLocations.textureCoord);
   }
 
   //say which program we use (we have a single one in this example)
-  gl.useProgram(programInfo.program);
+  gl.useProgram(prog_info.program);
 
   //set uniforms
-  gl.uniformMatrix4fv(programInfo.uniformLocations.projectionMatrix, false, projectionMatrix.m);
-  gl.uniformMatrix4fv( programInfo.uniformLocations.modelViewMatrix, false, modelViewMatrix.m);
-  let s = 0;
-  if (nb_frames > 10 && nb_frames < 90) {
-	s = (nb_frames-10)/80;
-  }
-  else if (nb_frames >= 90) {
-	s = 1;
-  }
-  gl.uniform1f(programInfo.uniformLocations.seuil, s);
+  gl.uniformMatrix4fv(prog_info.uniformLocations.projectionMatrix, false, projectionMatrix.m);
+  gl.uniformMatrix4fv( prog_info.uniformLocations.modelViewMatrix, false, modelViewMatrix.m);
+  let s = (nb_frames%25) / 25;
+  gl.uniform1f(prog_info.uniformLocations.seuil, s);
   //uniforms don't have to be set at each frame, they can be pushed only when modified
   //your program will likely declare many more uniforms to control the effect
 
   //activate video textures - first texture unit is 0
-  let first_tx = gl.TEXTURE0;
-  pids.forEach( pid => {
-    gl.activeTexture(first_tx);
-    gl.bindTexture(gl.TEXTURE_2D, pid.pck_tx);
-    //update texture unit by number of textures used by the texture for this pid
-    first_tx += pid.pck_tx.nb_textures;
-  });
+  let tx_id = gl.TEXTURE0;
+  let tx_unit = 0;
+  gl.activeTexture(tx_id);
+  gl.bindTexture(gl.TEXTURE_2D, tx1);
+  gl.uniform1i(prog_info.uniformLocations.texture1, tx_unit );
+  //update texture unit by number of textures used by the texture for this pid
+  tx_id += tx1.nb_textures;
+  tx_unit += tx1.nb_textures;
+  
+  if (tx2) {
+    gl.activeTexture(tx_id);
+    gl.bindTexture(gl.TEXTURE_2D, tx2);
+    gl.uniform1i(prog_info.uniformLocations.texture2, tx_unit );
+  }
+
+
 
 
   //bind indices and draw
@@ -275,7 +275,7 @@ void main() {
 the example below shows how to mix two videos at 50% when the first video is close to white (RGB= {1, 1, 1}), or keep the first video otherwise
 A first good exercice is to replace the constants used (0.9 and 0.5) by uniforms modified at each frame whose values depend on the number of frames drawn 
 */
-const fsSource = `
+const fsSourceMIX = `
 varying vec2 vTextureCoord;
 uniform sampler2D vidTx1;
 uniform sampler2D vidTx2;
@@ -289,14 +289,14 @@ void main(void) {
 }
 `;
 
-const fsSource2 = `
+const fsSourceFX = `
 varying vec2 vTextureCoord;
-uniform sampler2D vidTx1;
-uniform sampler2D vidTx2;
+uniform sampler2D imgTx;
 void main(void) {
   vec2 tx = vTextureCoord;
   tx.y = 1.0 - tx.y;
-  vec4 vid = texture2D(vidTx1, tx);
+  vec4 vid = texture2D(imgTx, tx);
+  vid.rgb = vec3(1.0) - vid.rgb;
   gl_FragColor = vid;
 }
 `;
