@@ -1,13 +1,19 @@
 //Transition fondu
 
-name : "fondu"
+const name = "fondu";
 
-uniform : [{name: 'fondu_seuil', default: "(nb_frames%100)/100", description: "nombre entre 0 et 1 qui définit la vitesse du fondu"}]
+const buffer = false;
 
-code tx : `vec2 inTextureCoord = tx;`
+const uniforms = [{name: 'fondu_seuil', default: (nb_frames%100)/100, description: 'nombre entre 0 et 1 qui définit la vitesse du fondu'}];
 
-code : `vec4 result = mix(result1, result2, fondu_seuil);`
+const codetx = `
+	vec2 inTextureCoord = tx;
+`;
 
-export { name, uniforms, code };
+const code = `
+	vec4 result = mix(result1, result2, fondu_seuil);
+`;
+
+export { name, buffer, uniforms, codetx, code };
 
 //fin du fichier

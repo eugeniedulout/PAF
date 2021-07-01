@@ -1,8 +1,9 @@
-//Code négatif
+const name = 'negatif'
 
-name : "negatif"
-code : 'vid.rgb = 1.0 - vid.rgb;'
+const uniforms = [];
 
-export { name, code };
+const code = `
+	vid.rgb = 1.0 - vid.rgb;
+`;
 
-//fin du fichier
+export { name, uniforms, code };
