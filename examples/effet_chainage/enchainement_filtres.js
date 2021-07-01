@@ -30,6 +30,14 @@ let buffers = null;
 
 let in_error = false;
 
+let counter = 0;
+//let fx_mod1 = null;
+
+let fx_mod1 = import('./BAndWhite.js')
+       .then( obj => { print('Module loaded: ' + obj.code + ' nb uniforms ' + obj.uniforms.length); counter--;})
+       .catch( err => { counter--; print('Failed to load object: ' + err); });
+
+
 filter.initialize = function()
 {
   //initialize WebGL
@@ -199,22 +207,18 @@ void main() {
 the example below shows how to perform reverse video effect if horizontal pixel to draw is less than 800.
 A first good exercice is to replace this 800 constant value by a uniform modified at each frame whose value depend on the number of frames drawn
 */
+import('BAndWhite.js')
+      .then( obj => { counter--; print('Module loaded: ' + obj.code + ' nb uniforms ' + obj.uniforms.length); fx1 = obj;})
+      .catch( err => { counter--; print('Failed to load object: ' + err)});
+
 const fsSource = `
 varying vec2 vTextureCoord;
 uniform sampler2D vidTx;
 
-vec3 effet1(vec3 rgb) {
-	return vec3((rgb.x+rgb.y+rgb.z)/3);
-}
-
-vec3 effet2(vec3 rgb) {
-	return (vec3(1.0) - rgb);
-}
-
 void main(void) {
   vec2 tx= vTextureCoord;
   vec4 vid = texture2D(vidTx, tx);
-  vid.rgb = effet2(effet1(vid.rgb));
+`+ fx_mod1.code + `
   gl_FragColor = vid;
 }
 `;
