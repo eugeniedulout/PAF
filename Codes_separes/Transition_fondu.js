@@ -4,7 +4,7 @@ const name = "fondu";
 
 const buffer = false;
 
-const uniforms = [{name: 'fondu_seuil', default: (nb_frames%100)/100, description: 'nombre entre 0 et 1 qui définit la vitesse du fondu'}];
+const uniforms = [{name: 'uniform float fondu_seuil', default: (nb_frames%100)/100, description: 'nombre entre 0 et 1 qui définit la vitesse du fondu'}];
 
 const codetx = `
 	vec2 inTextureCoord = tx;

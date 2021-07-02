@@ -353,6 +353,7 @@ filter.process = function()
   gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);  
   drawScene(gl, program_pass1, pids[0].pck_tx, pids[1].pck_tx);
   //second pass using our intermediate texture on main fbo
+// A MODIFIER
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); 
   drawScene(gl, program_pass2, off_tx, null);
 
@@ -502,7 +503,7 @@ void main() {
 the example below shows how to mix two videos at 50% when the first video is close to white (RGB= {1, 1, 1}), or keep the first video otherwise
 A first good exercice is to replace the constants used (0.9 and 0.5) by uniforms modified at each frame whose values depend on the number of frames drawn 
 */
-const fsSource1 = `
+/*const fsSource1 = `
 varying vec2 vTextureCoord;
 uniform sampler2D vidTx1;
 uniform sampler2D vidTx2;
@@ -526,7 +527,7 @@ void main(void) {
   vid.rgb = vec3(1.0) - vid.rgb;
   gl_FragColor = vid;
 }
-`;
+`;*/
 
 
 
