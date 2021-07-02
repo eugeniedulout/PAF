@@ -132,7 +132,8 @@ filter.process = function()
       program_pass1.uniformLocations.texture2 = gl.getUniformLocation(program_pass1.program, 'vidTx2');
 
       program_pass2 = setupProgram(gl, vsSource, fsSourceFX);
-      program_pass2.uniformLocations.texture1 = gl.getUniformLocation(program_pass2.program, 'imgTx');
+      program_pass2.uniformLocations.texture1 = gl.getUniformLocation(program_pass2.program, 'vidTx1');
+	  program_pass2.uniformLocations.texture2 = gl.getUniformLocation(program_pass2.program, 'imgTx')
     }
 
 
@@ -142,7 +143,7 @@ filter.process = function()
   drawScene(gl, program_pass1, pids[0].pck_tx, pids[1].pck_tx);
   //second pass using our intermediate texture on main fbo
   gl.bindFramebuffer(gl.FRAMEBUFFER, null); 
-  drawScene(gl, program_pass2, off_tx, null);
+  drawScene(gl, program_pass2, pids[0].pck_tx, off_tx);
 
   //flush (execute all pending commands in openGL)
 	gl.flush();
@@ -227,7 +228,7 @@ function drawScene(gl, prog_info, tx1, tx2)
   //set uniforms
   gl.uniformMatrix4fv(prog_info.uniformLocations.projectionMatrix, false, projectionMatrix.m);
   gl.uniformMatrix4fv( prog_info.uniformLocations.modelViewMatrix, false, modelViewMatrix.m);
-  let s = (nb_frames%25) / 25;
+  let s = (nb_frames%120) / 120;
   gl.uniform1f(prog_info.uniformLocations.seuil, s);
   //uniforms don't have to be set at each frame, they can be pushed only when modified
   //your program will likely declare many more uniforms to control the effect
@@ -284,20 +285,23 @@ void main(void) {
   vec2 tx= vTextureCoord;
   vec4 vid1 = texture2D(vidTx1, tx);
   vec4 vid2 = texture2D(vidTx2, tx);
-  vid1 = mix(vid1, vid2, seuil);
-  gl_FragColor = vid1;
+  vid1.rgb = 1.0 - vid1.rgb;
+  gl_FragColor = vid2;
 }
 `;
 
 const fsSourceFX = `
 varying vec2 vTextureCoord;
 uniform sampler2D imgTx;
+uniform sampler2D vidTx1;
+uniform float seuil;
 void main(void) {
   vec2 tx = vTextureCoord;
   tx.y = 1.0 - tx.y;
-  vec4 vid = texture2D(imgTx, tx);
-  vid.rgb = vec3(1.0) - vid.rgb;
-  gl_FragColor = vid;
+  vec4 vid1 = texture2D(imgTx, tx);
+  vec4 vid2 = texture2D(vidTx1, tx);
+  vid1 = mix(vid1, vid2, seuil);
+  gl_FragColor = vid1;
 }
 `;
 

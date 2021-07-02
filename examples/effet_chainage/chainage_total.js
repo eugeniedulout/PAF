@@ -146,7 +146,7 @@ function make_fs_source_1() {
 	
 	// effets vidéo 2
 	sampler2D inTexture = vidTx2;
-	vec4 vid = texture2D(vidTx2, tx);
+	vid = texture2D(vidTx2, tx);
 ` + code2 + `
 'vec4 result2 = vid;
 
