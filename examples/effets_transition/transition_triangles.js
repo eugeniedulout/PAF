@@ -277,6 +277,8 @@ void main(void) {
   vec2 tx= vTextureCoord;
   vec4 vid1 = texture2D(vidTx1, tx);
   vec4 vid2 = texture2D(vidTx2, tx);
+  vid1.rgb = vec3((vid1.r+vid1.g+vid1.b)/3.0);
+  vid2.rgb = 1.0 - vid2.rgb;
   if(in_top_triangle(tx) || in_bottom_triangle(tx)) {
 	vid1.rgb = vid2.rgb;
   }
